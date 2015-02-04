@@ -21,6 +21,7 @@ from buildbot.process.buildstep import LoggingBuildStep
 from buildbot.process.buildstep import SUCCESS
 from buildbot.process.properties import Properties
 from buildbot.process.properties import Property
+from buildbot.status.results import worst_status
 from twisted.internet import defer
 from twisted.python import log
 
@@ -136,6 +137,18 @@ class Trigger(LoggingBuildStep):
         return ss_for_trigger
 
     @defer.inlineCallbacks
+    def worstStatus(self, overall_results, rclist):
+        for was_cb, results in rclist:
+            if isinstance(results, tuple):
+                results, _ = results
+
+            if not was_cb:
+                yield self.addLogWithFailure(results)
+                results = EXCEPTION
+            overall_results = worst_status(overall_results, results)
+        defer.returnValue(overall_results)
+
+    @defer.inlineCallbacks
     def start(self):
         # Get all triggerable schedulers and check if there are invalid schedules
         (triggered_schedulers, invalid_schedulers) = self.getSchedulers()
@@ -144,6 +157,7 @@ class Trigger(LoggingBuildStep):
             self.end(FAILURE)
             return
 
+        results = SUCCESS
         self.running = True
 
         props_to_set = self.createTriggerProperties()
@@ -161,6 +175,7 @@ class Trigger(LoggingBuildStep):
             rclist = yield defer.DeferredList(dl, consumeErrors=1)
             if self.ended:
                 return
+            results = yield self.worstStatus(results, rclist)
         else:
             # do something to handle errors
             for d in dl:

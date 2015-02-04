@@ -527,6 +527,15 @@ class BuildStep(object, properties.PropertiesMixin):
         self._connectPendingLogObservers()
         return defer.succeed(None)
 
+    @defer.inlineCallbacks
+    def addLogWithFailure(self, why, logprefix=""):
+        # helper for showing exceptions to the users
+        try:
+            yield self.addCompleteLog(logprefix + "err.text", why.getTraceback())
+            yield self.addHTMLLog(logprefix + "err.html", formatFailure(why))
+        except Exception:
+            log.err(Failure(), "error while formatting exceptions")
+
     def addLogObserver(self, logname, observer):
         assert interfaces.ILogObserver.providedBy(observer)
         observer.setStep(self)
